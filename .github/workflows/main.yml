@@ -1,5 +1,5 @@
 name: "wiz-cli"
-on: [pull_request]
+on: [push]
 
 jobs:
   wiz-cli-iac-scan:
