@@ -1,55 +1,29 @@
-name: Docker Build/Scan/Push
+name: "wiz-cli"
+on: [pull_request]
 
-on:
-  push:
-    branches:
-      - main
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  Build-Scan-Push:
+  wiz-cli-iac-scan:
+    name: "Wiz-cli IaC Scan"
     runs-on: ubuntu-latest
     env:
-      IMAGE_REPO: ${{ secrets.DOCKER_USERNAME }}/site
-      IMAGE_TAG: latest
-      WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID }}
-      WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET }}
-      WIZ_POLICY: "Default vulnerabilities policy"
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - name: Checkout
-        uses: actions/checkout@v4
+      SCAN_PATH: "." # Set the relative path in the repo to scan
+      POLICY: "Default IaC policy" # Set the desired Wiz CLI policy to use
 
-      - name: Build the latest Docker image
-        run: docker build -t ${IMAGE_REPO}:${IMAGE_TAG} .
+    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      # Checkout the repository to the GitHub Actions runner
+      - name: Check out repository
+        uses: actions/checkout@v2
 
       - name: Download Wiz CLI
-        run: curl -o wizcli https://wizcli.app.wiz.io/latest/wizcli && chmod +x wizcli
+        run: curl -o wizcli https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64 && chmod +x wizcli
 
-      - name: Authenticate to Wiz
-        run: sudo -E ./wizcli auth --id "$WIZ_CLIENT_ID" --secret "$WIZ_CLIENT_SECRET"
-
-      - name: Run Wiz CLI image scan
-        id: scan
-        run: |-
-          sudo -E ./wizcli docker scan -i ${IMAGE_REPO}:${IMAGE_TAG} --policy-hits-only --driver mountWithLayers \
-          --dockerfile "./Dockerfile" --output wiz-output.json,sarif,true --tag github_action_run_id=${{ github.run_id }}
-        continue-on-error: true
-
-      # - name: Upload SARIF file
-      #   uses: github/codeql-action/upload-sarif@v3
-      #   with:
-      #     sarif_file: wiz-output.json
-      #     category: wiz
-        
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-
-      - name: Push the latest Docker image
-        run: docker push ${IMAGE_REPO}:${IMAGE_TAG}
-
-      - name: Run Wiz CLI image tag
-        run: sudo -E ./wizcli docker tag -i ${IMAGE_REPO}:${IMAGE_TAG}
+      - name: Run wiz CLI IaC scan
+        env:
+          WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID }}
+          WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET }}
+        run: ./wizcli scan dir $SCAN_PATH --policies "$POLICY"
